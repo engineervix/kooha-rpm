@@ -1,0 +1,173 @@
+name: RPM Build
+
+permissions:
+  contents: write
+  packages: write
+
+on:
+  schedule:
+    - cron: "0 */12 * * *" # Run every 12 hours
+  workflow_dispatch: # Allow manual triggers
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.check-version.outputs.new_version }}
+      current_version: ${{ steps.check-version.outputs.current_version }}
+      release_notes: ${{ steps.check-version.outputs.release_notes }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Check latest Kooha version
+        id: check-version
+        run: |
+          latest_release=$(curl -s https://api.github.com/repos/SeaDve/Kooha/releases/latest)
+          latest_version=$(echo "$latest_release" | jq -r .tag_name | sed 's/^v//')
+          release_notes=$(echo "$latest_release" | jq -r .body)
+          current_version=$(cat current_version.txt || echo "0.0.0")
+          if [ "$latest_version" != "$current_version" ]; then
+            echo "new_version=true" >> $GITHUB_OUTPUT
+            echo "$latest_version" > current_version.txt
+            echo "current_version=$latest_version" >> $GITHUB_OUTPUT
+            echo "release_notes<<EOF" >> $GITHUB_OUTPUT
+            echo "For more details, see: https://github.com/SeaDve/Kooha/releases/tag/v${latest_version}" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "$release_notes" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "new_version=false" >> $GITHUB_OUTPUT
+            echo "current_version=$current_version" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit version update
+        if: steps.check-version.outputs.new_version == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add current_version.txt
+          git commit -m "feat: update to version ${{ steps.check-version.outputs.current_version }}"
+          git push
+
+  build-rpm:
+    needs: check-and-build
+    if: needs.check-and-build.outputs.new_version == 'true'
+    runs-on: ubuntu-latest
+    container: fedora:latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          dnf install -y rpmdevtools rpm-build meson ninja-build appstream \
+          gstreamer1-devel gstreamer1-plugins-base-devel gtk4-devel libadwaita-devel \
+          gcc rust cargo git jq curl desktop-file-utils
+
+      - name: Setup RPM build environment
+        shell: bash
+        run: |
+          rpmdev-setuptree
+          # Download source tarball
+          version="${{ needs.check-and-build.outputs.current_version }}"
+          curl -L "https://github.com/SeaDve/Kooha/archive/refs/tags/v${version}.tar.gz" \
+            -o "/github/home/rpmbuild/SOURCES/v${version}.tar.gz"
+
+      - name: Update spec file
+        shell: bash
+        run: |
+          # Update version
+          sed -i "s/Version:.*/Version:        ${{ needs.check-and-build.outputs.current_version }}/" kooha.spec
+
+          # Prepare changelog entry
+          today=$(date +"%a %b %d %Y")
+          version="${{ needs.check-and-build.outputs.current_version }}"
+          changelog_entry="* ${today} GitHub Action <action@github.com> - ${version}-1\n"
+          changelog_entry="${changelog_entry}- Update to version ${version}\n"
+          changelog_entry="${changelog_entry}- For upstream release details: https://github.com/SeaDve/Kooha/releases/tag/v${version}\n"
+
+          # Process release notes if they exist
+          if [ ! -z "${{ needs.check-and-build.outputs.release_notes }}" ]; then
+            # Create a temporary file for release notes processing
+            echo "${{ needs.check-and-build.outputs.release_notes }}" > temp_notes.txt
+            # Convert each line to changelog format
+            while IFS= read -r line; do
+              if [ ! -z "$line" ]; then
+                changelog_entry="${changelog_entry}- ${line}\n"
+              fi
+            done < temp_notes.txt
+            rm temp_notes.txt
+          fi
+
+          # Add blank line after changelog entry
+          changelog_entry="${changelog_entry}\n"
+
+          # Insert the new changelog entry after the %changelog line
+          sed -i "/%changelog/a ${changelog_entry}" kooha.spec
+
+      - name: Build RPM
+        shell: bash
+        run: |
+          # Copy spec file to rpmbuild directory
+          cp kooha.spec ~/rpmbuild/SPECS/
+          # Build RPM
+          cd ~/rpmbuild/SPECS/
+          rpmbuild -ba kooha.spec
+
+      - name: Upload spec file
+        uses: actions/upload-artifact@v4
+        with:
+          name: spec-file
+          path: kooha.spec
+
+      - name: Upload RPM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpms
+          path: |
+            ~/rpmbuild/RPMS/x86_64/*.rpm
+            ~/rpmbuild/SRPMS/*.rpm
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ needs.check-and-build.outputs.current_version }}
+          files: |
+            ~/rpmbuild/RPMS/x86_64/*.rpm
+            ~/rpmbuild/SRPMS/*.rpm
+          body: ${{ needs.check-and-build.outputs.release_notes }}
+
+  commit-changes:
+    needs: [build-rpm, check-and-build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Download spec file
+        uses: actions/download-artifact@v4
+        with:
+          name: spec-file
+
+      - name: Commit and push changes
+        shell: bash
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git pull
+          git add kooha.spec
+          git commit -m "feat: update spec file for version ${{ needs.check-and-build.outputs.current_version }}"
+          git push
