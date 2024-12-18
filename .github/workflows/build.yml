@@ -123,6 +123,13 @@ jobs:
           cd ~/rpmbuild/SPECS/
           rpmbuild -ba kooha.spec
 
+      - name: Copy RPMs to workspace
+        shell: bash
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/rpms
+          cp ~/rpmbuild/RPMS/x86_64/*.rpm $GITHUB_WORKSPACE/rpms/
+          cp ~/rpmbuild/SRPMS/*.rpm $GITHUB_WORKSPACE/rpms/
+
       - name: Upload spec file
         uses: actions/upload-artifact@v4
         with:
@@ -133,9 +140,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rpms
-          path: |
-            ~/rpmbuild/RPMS/x86_64/*.rpm
-            ~/rpmbuild/SRPMS/*.rpm
+          path: rpms
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -144,8 +149,7 @@ jobs:
         with:
           tag_name: v${{ needs.check-and-build.outputs.current_version }}
           files: |
-            ~/rpmbuild/RPMS/x86_64/*.rpm
-            ~/rpmbuild/SRPMS/*.rpm
+            rpms/*.rpm
           body: ${{ needs.check-and-build.outputs.release_notes }}
 
   commit-changes:
