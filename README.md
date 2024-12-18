@@ -16,7 +16,7 @@ This RPM package provides a native installation that leverages your system's exi
 
 ## How it works
 
-- GitHub Actions checks for new Kooha releases every 12 hours
+- GitHub Actions checks for new Kooha releases every week
 - When a new release is detected, it:
   1. Updates the version tracking
   2. Builds new RPM packages
