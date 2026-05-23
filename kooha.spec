@@ -1,5 +1,5 @@
 Name:           kooha
-Version:        2.3.0
+Version:        2.3.1
 Release:        1%{?dist}
 Summary:        Elegantly record your screen
 
@@ -59,6 +59,15 @@ appstreamcli validate %{buildroot}/%{_datadir}/metainfo/*.metainfo.xml
 %{_datadir}/%{name}/resources.gresource
 
 %changelog
+* Sat May 23 2026 GitHub Action <action@github.com> - 2.3.1-1
+- Update to version 2.3.1
+- For upstream release details: https://github.com/SeaDve/Kooha/releases/tag/v2.3.1
+- For more details, see: https://github.com/SeaDve/Kooha/releases/tag/v2.3.1
+- This release contains minor changes:
+- * Updated UI
+- * Updated translations
+
+
 * Wed Dec 18 2024 GitHub Action <action@github.com> - 2.3.0-1
 - Update to version 2.3.0
 - For upstream release details: https://github.com/SeaDve/Kooha/releases/tag/v2.3.0
