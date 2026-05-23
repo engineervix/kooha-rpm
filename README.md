@@ -2,6 +2,8 @@
 
 [![RPM Build](https://github.com/engineervix/kooha-rpm/actions/workflows/build.yml/badge.svg)](https://github.com/engineervix/kooha-rpm/actions/workflows/build.yml)
 
+![Fedora](https://img.shields.io/badge/Fedora-294172?style=for-the-badge&logo=fedora&logoColor=white)
+
 Automated RPM package builder for [Kooha](https://github.com/SeaDve/Kooha), a simple screen recorder. This repository automatically checks for new releases of Kooha and builds RPM packages for Fedora.
 
 ## Why?
