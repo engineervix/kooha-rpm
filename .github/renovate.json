@@ -1,0 +1,35 @@
+{
+  "extends": [
+    "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchUpdateTypes": [
+        "patch",
+        "pin",
+        "digest"
+      ],
+      "automerge": true,
+      "semanticCommitType": "ci"
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "patch",
+        "pin",
+        "digest"
+      ],
+      "automerge": true,
+      "semanticCommitType": "ci"
+    }
+  ],
+  "timezone": "Africa/Lusaka",
+  "schedule": [
+    "* * * * 2,3"
+  ]
+}
